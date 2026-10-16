@@ -1,0 +1,195 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+<link rel="icon" href="data:," />
+<title>Loading…</title>
+<style>
+:root{
+  --line:#2b2f37; --text:#faf6ec; --muted:#8f877a; --accent:#ff4b1f;
+  --mono:"IBM Plex Mono",ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{color:var(--text);font-family:var(--mono);min-height:100vh;min-height:100dvh;
+display:flex;align-items:center;justify-content:center;
+background:linear-gradient(158deg,#1a1512 0%,#222226 50%,#0a0a0d 100%)}
+.wrap{text-align:center;padding:24px}
+.ring{width:72px;height:72px;margin:0 auto 20px;position:relative}
+.ring::before{content:"";position:absolute;inset:0;border-radius:50%;
+border:4px solid var(--line);border-top-color:var(--accent);animation:spin 0.9s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+#phase{font-size:.8rem;letter-spacing:2px;color:var(--muted)}
+#offline{display:none;margin-top:14px}
+#offline .off{font-size:.95rem;font-weight:700;letter-spacing:3px;margin-bottom:8px}
+#lastonline{font-size:.75rem;color:var(--muted);margin-bottom:10px}
+#hours{font-size:.72rem;color:var(--muted);margin-bottom:16px}
+#retry{font-family:inherit;font-size:.8rem;font-weight:600;cursor:pointer;border-radius:12px;
+padding:12px 24px;border:1px solid var(--line);background:transparent;color:var(--text);min-height:44px}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="ring"></div>
+  <div id="phase">LOADING</div>
+  <div id="offline">
+    <div class="off">SERVER OFFLINE</div>
+    <div id="lastonline"></div>
+    <div id="hours">Typically online evenings (PHT)</div>
+    <button id="retry">Retry now</button>
+  </div>
+</div>
+<script>
+(function(){
+  // Seconds of no-server before the spinner admits it is offline.
+  // (Short gaps just look like loading; the jump still happens on its own.)
+  var OFFLINE_AFTER_MS=12000, POLL_MS=4000;
+  // Edit this one line to change the hours shown on the offline notice.
+  var HOURS_TEXT='Typically online evenings (PHT)';
+  // Fast lane: the Contents API reflects `git push` in seconds, while the
+  // Pages-deployed live.json below waits on a 30-90s site rebuild.
+  var GH_API='https://api.github.com/repos/HostingWebsiteNiRicky/HostingWebsiteNiRicky.github.io/contents/live.json?ref=main';
+  var GH_ACCEPT='application/vnd.github.raw';
+  var apiEtag=null, apiState=null;
+  try{ apiEtag=localStorage.getItem('pm_etag')||null; }catch(e){}
+  function saveEtag(e){
+    apiEtag=e||null;
+    try{ if(e) localStorage.setItem('pm_etag',e); else localStorage.removeItem('pm_etag'); }catch(x){}
+  }
+  var q=new URLSearchParams(location.search);
+  var manual=(q.get('url')||'').replace(/\/+$/,'');
+  var phase=document.getElementById('phase'), box=document.getElementById('offline'),
+      lastEl=document.getElementById('lastonline');
+  document.getElementById('hours').textContent=HOURS_TEXT;
+  var jumped=false, offlineSince=null, checking=false;
+
+  function ago(iso){
+    var t=Date.parse(iso||''); if(isNaN(t)) return '';
+    var s=Math.max(0,Math.round((Date.now()-t)/1000));
+    if(s<90) return 'just now';
+    var m=Math.floor(s/60); if(m<90) return m+'m ago';
+    var h=Math.floor(m/60); if(h<48) return h+'h ago';
+    return Math.floor(h/24)+'d ago';
+  }
+  function parseLive(j){
+    return {url:(j.url||'').replace(/\/+$/,''),updated:j.updated||'',
+            instance:j.instance||''};
+  }
+  function fetchLive(){
+    if(manual) return Promise.resolve({url:manual,updated:'',instance:'manual override'});
+    // Fast lane first: fresh seconds after push, and 304s cost no quota.
+    var headers={'Accept':GH_ACCEPT};
+    if(apiEtag) headers['If-None-Match']=apiEtag;
+    return fetch(GH_API,{headers:headers,cache:'no-store'}).then(function(r){
+      // Both headers used here (If-None-Match, restricted Accept) are
+      // CORS-safelisted: no preflight, plain GET like any other fetch.
+      if(r.status===304){
+        if(apiState) return apiState;
+        throw 0; // have an ETag but no state (e.g. cleared cache): refetch below
+      }
+      if(!r.ok) throw 0; // e.g. 403 rate-limited: fall through to Pages files
+      var et=r.headers.get('ETag'); if(et) saveEtag(et);
+      return r.json().then(function(j){ apiState=parseLive(j); return apiState; });
+    }).catch(function(){
+      // Slow lane: Pages-deployed files (carry the rebuild lag).
+      return fetch('live.json?t='+Date.now()).then(function(r){ if(!r.ok) throw 0; return r.json(); })
+        .then(function(j){ return parseLive(j); })
+        .catch(function(){
+          return fetch('tunnel-url.txt?t='+Date.now()).then(function(r){ if(!r.ok) throw 0; return r.text(); })
+            .then(function(t){ return {url:t.trim().replace(/\/+$/,''),updated:'',instance:''}; })
+            // Neither file reachable (Pages misconfig / not deployed yet):
+            // stay on loading, say so once, keep retrying on the timer.
+            .catch(function(){ return {url:'',updated:'',instance:'',broken:true}; });
+        });
+    });
+  }
+  // Content-verified probe: the server already exposes /api/session with
+  // CORS open (`Access-Control-Allow-Origin: *`), returning our own JSON
+  // {ok:true, instance}. A dead tunnel's Cloudflare error page is HTML with
+  // no CORS headers, so the browser rejects it — exactly the distinction a
+  // no-cors connectivity check could never make (the edge "answers" 1033).
+  function probe(state, ms){
+    var ctrl=null; try{ ctrl=new AbortController(); }catch(e){ ctrl=null; }
+    var timer=setTimeout(function(){
+      try{ if(ctrl) ctrl.abort(); }catch(e){}
+    }, ms||8000);
+    function done(v){ try{ clearTimeout(timer); }catch(e){} return v; }
+    var opt={cache:'no-store', referrerPolicy:'no-referrer'};
+    if(ctrl) opt.signal=ctrl.signal;
+    return fetch(state.url+'/api/session?t='+Date.now(), opt)
+      .then(function(r){ if(!r.ok) throw 0; return r.json(); })
+      .then(function(d){
+        if(!(d&&d.ok===true)) return done(false);
+        // Right tunnel family, wrong manager instance: not ours, don't jump.
+        if(state.instance&&d.instance&&state.instance!=='manual override'
+           &&String(d.instance).toLowerCase()!==String(state.instance).toLowerCase())
+          return done(false);
+        return done(true);
+      })
+      .catch(function(){ return done(false); });
+  }
+  function tick(){
+    // Poll lane (slow but durable): newest-first fetch, shared handler.
+    if(jumped||checking) return;
+    fetchLive().then(handleState);
+  }
+  function handleState(s){
+    // URL known — but jump only when OUR server answers with its own JSON.
+    // A stale live.json (Pages rebuild lag after host.py stops) must never
+    // throw visitors at a dead tunnel's Cloudflare error page.
+    if(jumped) return;
+    if(!s.url){ markOffline(s.updated, s.broken); return; }
+    if(checking) return;
+    checking=true;
+    phase.textContent='LOADING';
+    probe(s, 8000).then(function(alive){
+      checking=false;
+      if(jumped) return;
+      if(alive){ jumped=true; location.href=s.url; }
+      else markOffline(s.updated, s.broken);
+    });
+  }
+  // Push lane (realtime): the host POSTs every new address to this topic,
+  // so waiting pages learn it in seconds instead of next poll. Same
+  // handleState + probe gate as above, so forged or dead links are ignored
+  // exactly like stale ones. The poll lane keeps running underneath, so a
+  // blocked stream or a down ntfy only costs speed, never correctness.
+  var NTFY_URL='https://ntfy.sh/pm-live-794b8ab67dd317504d6ac58b/sse';
+  var lastPushed=null;
+  try{
+    var es=new EventSource(NTFY_URL);
+    es.onmessage=function(ev){
+      try{
+        var d=JSON.parse(ev.data);
+        if(!d||d.event&&d.event!=='message') return;
+        var s=parseLive(JSON.parse(d.message));
+        if(s.url&&s.url===lastPushed) return; // already on it / probing it
+        lastPushed=s.url||null;
+        handleState(s);
+      }catch(e){}
+    };
+    es.onerror=function(){ try{ es.close(); }catch(e){} };
+  }catch(e){}
+  function markOffline(updated, broken){
+    // No server (or a dead one). Stay a plain spinner for a while, then say
+    // so honestly — but keep polling, so this still jumps by itself when
+    // host.py returns.
+    if(offlineSince===null) offlineSince=Date.now();
+    if(Date.now()-offlineSince>=OFFLINE_AFTER_MS){
+      phase.textContent='LOADING';
+      box.style.display='block';
+      lastEl.textContent=broken?('This page is not connected to a server yet.')
+        :(updated?('Last online '+ago(updated)):(''));
+    } else {
+      phase.textContent='LOADING';
+    }
+  }
+  document.getElementById('retry').onclick=function(){
+    offlineSince=null; box.style.display='none'; checking=false; tick();
+  };
+  tick();
+  setInterval(tick,POLL_MS);
+})();
+</script>
+</body>
+</html>
