@@ -1,6 +1,6 @@
 {
-  "url": "https://wheels-registered-richards-carried.trycloudflare.com",
-  "updated": "2026-10-16T22:25:31+00:00",
+  "url": "https://called-reductions-voices-hazards.trycloudflare.com",
+  "updated": "2026-10-18T09:37:33+00:00",
   "instance": "main",
   "projects": [
     {
@@ -26,6 +26,10 @@
     {
       "id": "faculty-bridge-v1-0",
       "name": "Faculty Bridge v1.0"
+    },
+    {
+      "id": "faculty-bridge-ppt",
+      "name": "Faculty Bridge PPT"
     }
   ]
 }
