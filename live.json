@@ -1,6 +1,6 @@
 {
-  "url": "https://balanced-utility-phillips-struck.trycloudflare.com",
-  "updated": "2026-10-30T03:20:18+00:00",
+  "url": "https://condition-deviant-meeting-prophet.trycloudflare.com",
+  "updated": "2026-10-31T03:55:20+00:00",
   "instance": "main",
   "projects": [
     {
@@ -58,6 +58,10 @@
     {
       "id": "unievent-2",
       "name": "UNIEVENT"
+    },
+    {
+      "id": "trisha-study-buddy",
+      "name": "Trisha Study Buddy"
     }
   ]
 }
