@@ -1,15 +1,11 @@
 {
-  "url": "https://condition-deviant-meeting-prophet.trycloudflare.com",
-  "updated": "2026-10-31T03:55:20+00:00",
+  "url": "https://chen-tucson-transcription-received.trycloudflare.com",
+  "updated": "2026-11-01T05:05:29+00:00",
   "instance": "main",
   "projects": [
     {
       "id": "verifid",
       "name": "VerifID"
-    },
-    {
-      "id": "baoncheck",
-      "name": "BaonCheck"
     },
     {
       "id": "unievent",
@@ -62,6 +58,10 @@
     {
       "id": "trisha-study-buddy",
       "name": "Trisha Study Buddy"
+    },
+    {
+      "id": "sirms",
+      "name": "SIRMS"
     }
   ]
 }
