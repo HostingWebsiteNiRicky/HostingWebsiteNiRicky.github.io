@@ -1,6 +1,6 @@
 {
-  "url": "https://care-crystal-venture-bunny.trycloudflare.com",
-  "updated": "2026-11-02T23:47:34+00:00",
+  "url": "https://courtesy-edge-thermal-changes.trycloudflare.com",
+  "updated": "2026-11-07T03:06:29+00:00",
   "instance": "main",
   "projects": [
     {
@@ -62,6 +62,14 @@
     {
       "id": "sirms",
       "name": "SIRMS"
+    },
+    {
+      "id": "crowncare",
+      "name": "CrownCare"
+    },
+    {
+      "id": "baon-check-2",
+      "name": "Baon Check 2"
     }
   ]
 }
